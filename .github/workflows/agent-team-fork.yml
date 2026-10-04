@@ -54,6 +54,12 @@ jobs:
       - name: Typecheck client
         run: npm run typecheck-client
 
+      - name: Prepare Electron sandbox
+        run: |
+          npm run electron
+          sudo chown root:root .build/electron/chrome-sandbox
+          sudo chmod 4755 .build/electron/chrome-sandbox
+
       - name: Run tests for Agent Team changes
         run: |
           xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' ./scripts/test.sh \
@@ -62,3 +68,5 @@ jobs:
             --run src/vs/workbench/contrib/output/test/browser/outputChannelModel.test.ts \
             --run src/vs/workbench/services/accounts/test/browser/defaultAccount.test.ts \
             --run src/vs/workbench/services/chat/test/common/chatEntitlementService.test.ts
+        env:
+          VSCODE_SKIP_PRELAUNCH: '1'
