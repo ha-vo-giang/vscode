@@ -1,0 +1,54 @@
+name: Agent Team fork
+
+on:
+  push:
+    branches:
+      - 'agent-team/**'
+
+concurrency:
+  group: agent-team-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VSCODE_QUALITY: oss
+
+jobs:
+  verify-and-test:
+    name: Typecheck and targeted unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout fork branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Prepare Electron types
+        run: node build/npm/electronTypes.ts
+
+      - name: Typecheck client
+        run: npm run typecheck-client
+
+      - name: Run tests for Agent Team changes
+        run: |
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' ./scripts/test.sh \
+            --run src/vs/workbench/contrib/chat/test/browser/chatConfiguration.test.ts \
+            --run src/vs/workbench/contrib/chat/test/browser/widget/chatWidget.test.ts \
+            --run src/vs/workbench/contrib/output/test/browser/outputChannelModel.test.ts \
+            --run src/vs/workbench/services/accounts/test/browser/defaultAccount.test.ts \
+            --run src/vs/workbench/services/chat/test/common/chatEntitlementService.test.ts
