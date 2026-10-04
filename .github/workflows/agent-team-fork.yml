@@ -54,6 +54,9 @@ jobs:
       - name: Typecheck client
         run: npm run typecheck-client
 
+      - name: Transpile client
+        run: npm run gulp transpile-client-esbuild
+
       - name: Prepare Electron sandbox
         run: |
           npm run electron
