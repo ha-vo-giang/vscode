@@ -1039,6 +1039,13 @@ export class ChatWidget extends Disposable implements IChatWidget {
 		return this.input.inputEditor;
 	}
 
+	hasInputEditor(): boolean {
+		const input = this.viewModel?.editing && this.configurationService.getValue<string>('chat.editRequests') !== 'input'
+			? this.inlineInputPartDisposable.value
+			: this.inputPartDisposable.value;
+		return !!input?.inputEditor;
+	}
+
 	get contentHeight(): number {
 		return this.input.height.get() + this.listWidget.contentHeight + this.chatSuggestNextWidget.height;
 	}
@@ -2683,6 +2690,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 			this.input.attachmentModel.updateContext(disabledTools, Iterable.empty());
 			this.refreshParsedInput();
 		}));
+		this._onDidChangeActiveInputEditor.fire();
 	}
 
 	private onDidStyleChange(): void {

@@ -125,6 +125,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	private restoringSession: Promise<void> | undefined;
 	private readonly loadSessionCts = this._register(new MutableDisposable<CancellationTokenSource>());
 	private readonly _applyModelCts = this._register(new MutableDisposable<CancellationTokenSource>());
+	private pendingModel: { model: IChatModel; baselineInput: string; viewState: IChatWidgetViewState | undefined } | undefined;
 	/** While > 0 the sessions list is suppressed so a session transition's transiently-empty widget does not reveal it (see {@link beginSessionsListSuppression}). */
 	private _sessionsListSuppressionCount = 0;
 	private readonly modelRef = this._register(new MutableDisposable<IChatModelReference>());
@@ -180,6 +181,9 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 	) {
 		super(options, keybindingService2, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 		this.element.classList.add('chat-viewpane-container');
+		this._register(toDisposable(() => {
+			this.pendingModel = undefined;
+		}));
 
 		// View state for the ViewPane is currently global per-provider basically,
 		// but some other strictly per-model state will require a separate memento.
@@ -1079,6 +1083,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 				inputEditorBackground: locationBasedColors.background,
 				resultEditorBackground: editorBackground,
 			}));
+		this._register(this._widget.onDidChangeActiveInputEditor(() => this.applyPendingModel()));
 		this._widget.render(chatControlsContainer, parent);
 		this._register(scopedInstantiationService.createInstance(AgentHostSessionInputPills, this._widget, 'auto'));
 
@@ -1245,6 +1250,19 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		this.restoringSession.finally(() => this.restoringSession = undefined);
 	}
 
+	private applyPendingModel(): void {
+		const pending = this.pendingModel;
+		if (!pending || !this._widget?.hasInputEditor()) {
+			return;
+		}
+
+		this.pendingModel = undefined;
+		setModelPreservingInputTypedWhileLoading(this._widget, pending.baselineInput, () => this._widget.setModel(pending.model));
+		if (pending.viewState) {
+			this._widget.restoreViewState(pending.viewState);
+		}
+	}
+
 	private async _applyModel(token: CancellationToken): Promise<void> {
 		const session = await this.acquireTransferredOrPersistedSession(token, 'ChatViewPane#applyModel');
 		await this.showModel(token, session.modelRef, true, !session.modelRef, undefined, session.localFallbackSelectionReason);
@@ -1335,6 +1353,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 			this.widgetViewStates.set(getComparisonKey(oldModelResource), this._widget.getViewState());
 		}
 		this.modelRef.value = undefined;
+		this.pendingModel = undefined;
 
 		// Baseline draft for preserving text typed during loading. `loadSession`
 		// opens its load window before calling us, so it passes its own baseline;
@@ -1378,10 +1397,14 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		}
 
 		if (model) {
-			setModelPreservingInputTypedWhileLoading(this._widget, baselineInput, () => this._widget.setModel(model));
 			const widgetViewState = this.widgetViewStates.get(getComparisonKey(model.sessionResource));
-			if (widgetViewState) {
-				this._widget.restoreViewState(widgetViewState);
+			if (this._widget.hasInputEditor()) {
+				setModelPreservingInputTypedWhileLoading(this._widget, baselineInput, () => this._widget.setModel(model));
+				if (widgetViewState) {
+					this._widget.restoreViewState(widgetViewState);
+				}
+			} else {
+				this.pendingModel = { model, baselineInput, viewState: widgetViewState };
 			}
 		} else {
 			this._widget.setModel(model);
