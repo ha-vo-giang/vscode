@@ -53,7 +53,7 @@ export async function main(argv: string[]): Promise<void> {
 
 	for (const subcommand of NATIVE_CLI_COMMANDS) {
 		if (args[subcommand]) {
-			if (!product.tunnelApplicationName) {
+			if (!product.tunnelApplicationName || !product.tunnelApplicationConfig) {
 				console.error(`'${subcommand}' command not supported in ${product.applicationName}`);
 				return;
 			}
