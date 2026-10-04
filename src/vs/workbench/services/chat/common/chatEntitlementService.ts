@@ -456,6 +456,16 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 		}
 
 		if (!productService.defaultChatAgent) {
+			// No default chat agent product config means ChatEntitlementContext
+			// (which maps chat.disableAIFeatures to the hidden context key) is
+			// never created. Honor the setting directly so built-in chat UI
+			// (chat view, status entry, agents banner) can still be hidden.
+			this.updateFallbackHidden();
+			this._register(this.configurationService.onDidChangeConfiguration(e => {
+				if (e.affectsConfiguration(ChatAIDisabledSettingId)) {
+					this.updateFallbackHidden();
+				}
+			}));
 			return; // we need a default chat agent configured going forward from here
 		}
 
@@ -735,9 +745,20 @@ export class ChatEntitlementService extends Disposable implements IChatEntitleme
 			this.context.value.setForceHidden(hidden);
 		} else {
 			// No ChatEntitlementContext (e.g. no defaultChatAgent in product.json).
-			// Set the context key directly as a fallback.
-			ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(hidden);
+			// Mirror ChatEntitlementContext.withConfiguration: forced hidden OR
+			// chat.disableAIFeatures, so the account policy gate reporting
+			// "not blocked" cannot un-hide chat that the setting disables.
+			this._fallbackForceHidden = hidden;
+			this.updateFallbackHidden();
 		}
+	}
+
+	private _fallbackForceHidden = false;
+
+	private updateFallbackHidden(): void {
+		ChatEntitlementContextKeys.Setup.hidden.bindTo(this.contextKeyService).set(
+			this._fallbackForceHidden || this.configurationService.getValue(ChatAIDisabledSettingId) === true
+		);
 	}
 
 	async update(token: CancellationToken): Promise<void> {
