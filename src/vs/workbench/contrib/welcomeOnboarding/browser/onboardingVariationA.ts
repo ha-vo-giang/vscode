@@ -10,7 +10,7 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isWindows, isMacintosh, isLinux } from '../../../../base/common/platform.js';
-import { assertDefined } from '../../../../base/common/types.js';
+import type { IDefaultChatAgent } from '../../../../base/common/product.js';
 import { FileAccess } from '../../../../base/common/network.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
@@ -77,8 +77,12 @@ type OnboardingActionEvent = {
 
 type EnterpriseSignInUiState = 'options' | 'instance' | 'progress';
 
-assertDefined(product.defaultChatAgent, 'Onboarding requires a default chat agent product configuration.');
-const defaultChat = product.defaultChatAgent;
+// This product ships no Copilot, so `product.defaultChatAgent` may be absent.
+// The sign-in step is meaningless then; onboarding degrades to a no-op.
+// show() returns early when it is absent, so the wizard code below only runs
+// with a real config and keeps the non-optional type.
+const hasDefaultChat = !!product.defaultChatAgent;
+const defaultChat = product.defaultChatAgent as IDefaultChatAgent;
 
 /**
  * Variation A — Classic Wizard Modal
@@ -167,6 +171,13 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
 
 	show(): void {
 		if (this.overlay) {
+			return;
+		}
+
+		// No default chat agent product config (this product ships no Copilot):
+		// the sign-in step is meaningless, so skip onboarding entirely.
+		if (!hasDefaultChat) {
+			this._onDidDismiss.fire();
 			return;
 		}
 
