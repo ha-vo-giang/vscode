@@ -810,7 +810,14 @@ export class DelegatedOutputChannelModel extends Disposable implements IOutputCh
 	private async createOutputChannelModel(id: string, modelUri: URI, language: ILanguageSelection, outputDir: URI, outputDirPromise: Promise<void>): Promise<IOutputChannelModel> {
 		await outputDirPromise;
 		const file = resources.joinPath(outputDir, `${id.replace(/[\\/:\*\?"<>\|]/g, '')}.log`);
-		await this.fileService.createFile(file);
+		try {
+			await this.fileService.createFile(file);
+		} catch (error) {
+			// Agent Team: a restored or concurrently created channel may already own this file; reuse it.
+			if (toFileOperationResult(error) !== FileOperationResult.FILE_MODIFIED_SINCE) {
+				throw error;
+			}
+		}
 		const outputChannelModel = this._register(this.instantiationService.createInstance(OutputChannelBackedByFile, id, modelUri, language, file));
 		this._register(outputChannelModel.onDispose(() => this._onDispose.fire()));
 		return outputChannelModel;
