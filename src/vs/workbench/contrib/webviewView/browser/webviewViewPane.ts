@@ -34,6 +34,11 @@ const storageKeys = {
 	webviewState: 'webviewState',
 } as const;
 
+/**
+ * agent-team: webview views that accept dropped files without holding Shift (Agent Team Chat).
+ */
+const dropWithoutShiftViewTypes = new Set<string>(['openclaw.chat']);
+
 interface WebviewViewState {
 	[storageKeys.webviewState]?: string | undefined;
 }
@@ -170,7 +175,7 @@ export class WebviewViewPane extends ViewPane {
 			origin,
 			providedViewType: this.id,
 			title: this.title,
-			options: { purpose: WebviewContentPurpose.WebviewView },
+			options: { purpose: WebviewContentPurpose.WebviewView, enableDropWithoutShift: dropWithoutShiftViewTypes.has(this.id) },
 			contentOptions: {},
 			extension: this.extensionId ? { id: this.extensionId } : undefined
 		});

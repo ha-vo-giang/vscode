@@ -69,6 +69,7 @@ jobs:
             --run src/vs/workbench/contrib/chat/test/browser/chatConfiguration.test.ts \
             --run src/vs/workbench/contrib/chat/test/browser/widget/chatWidget.test.ts \
             --run src/vs/workbench/contrib/output/test/browser/outputChannelModel.test.ts \
+            --run src/vs/workbench/contrib/webview/test/browser/webviewWindowDragMonitor.test.ts \
             --run src/vs/workbench/services/accounts/test/browser/defaultAccount.test.ts \
             --run src/vs/workbench/services/chat/test/common/chatEntitlementService.test.ts
         env:

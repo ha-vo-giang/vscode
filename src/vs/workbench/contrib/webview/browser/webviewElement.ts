@@ -36,6 +36,7 @@ import { decodeAuthority, webviewGenericCspSource, webviewRootResourceAuthority 
 import { loadLocalResource, WebviewResourceResponse } from './resourceLoading.js';
 import { WebviewThemeDataProvider } from './themeing.js';
 import { areWebviewContentOptionsEqual, IWebviewElement, WebviewContentOptions, WebviewExtensionDescription, WebviewInitInfo, WebviewMessageReceivedEvent, WebviewOptions } from './webview.js';
+import { shouldAcceptDragWithoutShift } from './webviewWindowDragMonitor.js';
 import { WebviewFindDelegate, WebviewFindWidget } from './webviewFindWidget.js';
 import { FromWebviewMessage, KeyEvent, ToWebviewMessage, WebViewDragEvent } from './webviewMessages.js';
 
@@ -321,10 +322,17 @@ export class WebviewElement extends Disposable implements IWebviewElement, Webvi
 		}));
 
 		this._register(this.on('drag-start', () => {
+			if (this._options.enableDropWithoutShift) {
+				// agent-team: keep file drags inside this webview so its content receives the drop.
+				return;
+			}
 			this._startBlockingIframeDragEvents();
 		}));
 
 		this._register(this.on('drag', (event) => {
+			if (this._options.enableDropWithoutShift) {
+				return;
+			}
 			this.handleDragEvent('drag', event);
 		}));
 
@@ -750,12 +758,19 @@ export class WebviewElement extends Disposable implements IWebviewElement, Webvi
 		this.window?.dispatchEvent(emulatedDragEvent);
 	}
 
-	windowDidDragStart(): void {
+	windowDidDragStart(position?: { readonly x: number; readonly y: number }): void {
+		if (shouldAcceptDragWithoutShift(this._options.enableDropWithoutShift, this.element?.getBoundingClientRect(), position)) {
+			// agent-team: the pointer is over a webview that accepts drops without Shift.
+			this._stopBlockingIframeDragEvents();
+			return;
+		}
+
 		// Webview break drag and dropping around the main window (no events are generated when you are over them)
 		// Work around this by disabling pointer events during the drag.
 		// https://github.com/electron/electron/issues/18226
 		this._startBlockingIframeDragEvents();
 	}
+
 
 	windowDidDragEnd(): void {
 		this._stopBlockingIframeDragEvents();

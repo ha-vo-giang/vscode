@@ -104,6 +104,13 @@ export interface WebviewOptions {
 
 	readonly tryRestoreScrollPosition?: boolean;
 	readonly retainContextWhenHidden?: boolean;
+
+	/**
+	 * agent-team: let drags dropped on this webview reach its content without holding Shift.
+	 * Other webviews keep blocking iframe drag events so editor drag and drop still works.
+	 */
+	readonly enableDropWithoutShift?: boolean;
+
 	transformCssVariables?(styles: WebviewStyles): WebviewStyles;
 }
 
@@ -279,7 +286,10 @@ export interface IWebview extends IDisposable {
 	undo(): void;
 	redo(): void;
 
-	windowDidDragStart(): void;
+	/**
+	 * @param position Pointer position in window coordinates, when known.
+	 */
+	windowDidDragStart(position?: { readonly x: number; readonly y: number }): void;
 	windowDidDragEnd(): void;
 
 	setContextKeyService(scopedContextKeyService: IContextKeyService): void;

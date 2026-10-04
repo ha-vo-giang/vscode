@@ -419,8 +419,8 @@ export class OverlayWebview extends Disposable implements IOverlayWebview {
 		}
 	}
 
-	windowDidDragStart() {
-		this._webview.value?.windowDidDragStart();
+	windowDidDragStart(position?: { readonly x: number; readonly y: number }) {
+		this._webview.value?.windowDidDragStart(position);
 	}
 
 	windowDidDragEnd() {
