@@ -189,6 +189,8 @@ export function backfillTransferredModel(
 	return { ...transferredState, selectedModel: historyModel };
 }
 
+const NO_DEFAULT_AGENT_MESSAGE = 'No default agent contributed';
+
 export class ChatService extends Disposable implements IChatService {
 	declare _serviceBrand: undefined;
 
@@ -615,7 +617,15 @@ export class ChatService extends Disposable implements IChatService {
 		// Activate the default extension provided agent but do not wait
 		// for it to be ready so that the session can be used immediately
 		// without having to wait for the agent to be ready.
-		this.activateDefaultAgent(model.initialLocation).catch(e => this.logService.error(e));
+		this.activateDefaultAgent(model.initialLocation).catch(e => {
+			// Agent Team ships no built-in default chat agent, so a session that
+			// starts without one is expected and must not be reported as an error.
+			if (e instanceof ErrorNoTelemetry && e.message === NO_DEFAULT_AGENT_MESSAGE) {
+				this.trace('initializeSession', e.message);
+				return;
+			}
+			this.logService.error(e);
+		});
 	}
 
 	async activateDefaultAgent(location: ChatAgentLocation): Promise<void> {
@@ -623,7 +633,7 @@ export class ChatService extends Disposable implements IChatService {
 
 		const defaultAgentData = this.chatAgentService.getContributedDefaultAgent(location) ?? this.chatAgentService.getContributedDefaultAgent(ChatAgentLocation.Chat);
 		if (!defaultAgentData) {
-			throw new ErrorNoTelemetry('No default agent contributed');
+			throw new ErrorNoTelemetry(NO_DEFAULT_AGENT_MESSAGE);
 		}
 
 		// Await activation of the extension provided agent
