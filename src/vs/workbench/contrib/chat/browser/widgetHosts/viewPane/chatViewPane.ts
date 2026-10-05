@@ -1358,7 +1358,8 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		// Baseline draft for preserving text typed during loading. `loadSession`
 		// opens its load window before calling us, so it passes its own baseline;
 		// otherwise this call's own await is the load window. See #325323.
-		const baselineInput = inputBeforeLoad ?? this._widget?.getInput() ?? '';
+		// The input editor may not be mounted yet during startup; there is no draft to preserve then.
+		const baselineInput = inputBeforeLoad ?? (this._widget?.hasInputEditor() ? this._widget.getInput() : '');
 
 		let ref: IChatModelReference | undefined;
 		if (startNewSession) {
@@ -1479,7 +1480,7 @@ export class ChatViewPane extends ViewPane implements IViewWelcomeDelegate {
 		// Capture the input draft up front: the load window (clear + acquire below)
 		// opens before `showModel` binds, so text typed during loading must be
 		// baselined here to be preserved rather than erased. See #325323.
-		const inputBeforeLoad = this._widget?.getInput() ?? '';
+		const inputBeforeLoad = this._widget?.hasInputEditor() ? this._widget.getInput() : '';
 
 		// Cancel any in-flight loadSession call so the last one always wins
 		this.loadSessionCts.value?.cancel();
