@@ -6,6 +6,7 @@
 import { isWeb, isWindows } from '../../../base/common/platform.js';
 import { PolicyCategory } from '../../../base/common/policy.js';
 import { localize } from '../../../nls.js';
+import product from '../../product/common/product.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 
@@ -89,7 +90,8 @@ configurationRegistry.registerConfiguration({
 		},
 		'update.titleBar': {
 			type: 'boolean',
-			default: true,
+			// Agent Team: no update server, so the indicator could only say "Updates Disabled".
+			default: !!product.updateUrl,
 			scope: ConfigurationScope.APPLICATION,
 			description: localize('updateTitleBar', "Show the update indicator in the title bar."),
 			included: !isWeb
