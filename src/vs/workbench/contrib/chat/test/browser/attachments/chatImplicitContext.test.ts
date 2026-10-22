@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
-import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { DeferredPromise, timeout } from '../../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../../../base/common/errors.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
@@ -17,9 +17,10 @@ import { ITextModel } from '../../../../../../editor/common/model.js';
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { ChatImplicitContextContribution, ChatImplicitContexts } from '../../../browser/attachments/chatImplicitContext.js';
-import { IChatWidget, IChatWidgetService } from '../../../browser/chat.js';
+import { IChatWidget } from '../../../browser/chat.js';
 import { IChatContextService } from '../../../browser/contextContrib/chatContextService.js';
 import { ChatInputPart } from '../../../browser/widget/input/chatInputPart.js';
+import { ChatWidgetService } from '../../../browser/widget/chatWidgetService.js';
 import { IChatService } from '../../../common/chatService/chatService.js';
 import { ChatAgentLocation } from '../../../common/constants.js';
 import { IChatEditingService } from '../../../common/editing/chatEditingService.js';
@@ -30,6 +31,16 @@ suite('ChatImplicitContextContribution lifecycle', () => {
 	const resource = URI.file('/workspace/current.ts');
 
 	function createHarness() {
+		const widgets = store.add(new ChatWidgetService(
+			upcastPartial<ConstructorParameters<typeof ChatWidgetService>[0]>({}),
+			upcastPartial<ConstructorParameters<typeof ChatWidgetService>[1]>({}),
+			upcastPartial<ConstructorParameters<typeof ChatWidgetService>[2]>({}),
+			upcastPartial<ConstructorParameters<typeof ChatWidgetService>[3]>({}),
+			upcastPartial<IEditorService>({}),
+			upcastPartial<IChatService>({}),
+			upcastPartial<ConstructorParameters<typeof ChatWidgetService>[6]>({}),
+		));
+		let currentResource = resource;
 		const contexts = store.add(new ChatImplicitContexts());
 		let input: ChatInputPart | undefined = upcastPartial<ChatInputPart>({ implicitContext: contexts });
 		let active = false;
@@ -39,17 +50,22 @@ suite('ChatImplicitContextContribution lifecycle', () => {
 		const widget = upcastPartial<IChatWidget>({
 			get input() { return input!; },
 			location: ChatAgentLocation.Chat,
-			viewModel: upcastPartial<NonNullable<IChatWidget['viewModel']>>({ getItems: () => [] }),
+			viewModel: upcastPartial<NonNullable<IChatWidget['viewModel']>>({ getItems: () => [], sessionResource: URI.parse('test:session') }),
+			onDidFocus: Event.None,
+			onDidShow: Event.None,
+			onDidHide: Event.None,
+			onDidChangeViewModel: Event.None,
 		});
 		const editor = upcastPartial<ICodeEditor>({
-			getModel: () => upcastPartial<ITextModel>({ uri: resource, getLanguageId: () => 'typescript' }),
+			getModel: () => upcastPartial<ITextModel>({ uri: currentResource, getLanguageId: () => 'typescript' }),
 			getSelection: () => null,
 		});
 		const configuration = new TestConfigurationService({ chat: { implicitContext: { enabled: { [ChatAgentLocation.Chat]: 'always' }, suggestedContext: true } } });
+		store.add(widgets.register(widget));
 		const contribution = store.add(new ChatImplicitContextContribution(
 			upcastPartial<ICodeEditorService>({ getActiveCodeEditor: () => active ? editor : null }),
 			upcastPartial<IEditorService>({ onDidActiveEditorChange: Event.None, getVisibleTextEditorControls: () => [], activeEditor: {} as IEditorService['activeEditor'] }),
-			upcastPartial<IChatWidgetService>({ onDidAddWidget: Event.None, getWidgetsByLocations: () => [], getWidgetBySessionResource: () => widget }),
+			widgets,
 			upcastPartial<IChatService>({ onDidSubmitRequest: submit.event }),
 			upcastPartial<IChatEditingService>({ editingSessionsObs: observableValue('editingSessions', []) }),
 			configuration,
@@ -59,7 +75,23 @@ suite('ChatImplicitContextContribution lifecycle', () => {
 		active = true;
 		return {
 			contexts,
-			update: () => contribution['updateImplicitContext'](widget),
+			addWidget: () => {
+				const contexts = store.add(new ChatImplicitContexts());
+				const added = upcastPartial<IChatWidget>({
+					input: upcastPartial<ChatInputPart>({ implicitContext: contexts }),
+					location: ChatAgentLocation.Chat,
+					viewModel: widget.viewModel,
+					onDidFocus: Event.None,
+					onDidShow: Event.None,
+					onDidHide: Event.None,
+					onDidChangeViewModel: Event.None,
+				});
+				store.add(widgets.register(added));
+				return contexts;
+			},
+			refreshAll: () => contribution['updateImplicitContext'](),
+			setResource: (value: URI) => { currentResource = value; },
+			update: () => contribution['updateImplicitContext'](),
 			disposeContribution: () => contribution.dispose(),
 			cancel: () => contribution['_currentCancelTokenSource'].value?.cancel(),
 			disposeInput: () => { input = undefined; },
@@ -68,6 +100,41 @@ suite('ChatImplicitContextContribution lifecycle', () => {
 			submit: () => submit.fire({ chatSessionResource: URI.parse('test:session') }),
 		};
 	}
+
+	test('overlapping widget registrations initialize both live widgets with current context', async () => {
+		const h = createHarness();
+		const pending = new DeferredPromise<undefined>();
+		h.setContextResolver(() => pending.p);
+		const first = h.addWidget();
+		const latestResource = URI.file('/workspace/latest.ts');
+		h.setResource(latestResource);
+		h.setContextResolver(async () => undefined);
+		const second = h.addWidget();
+		await timeout(0);
+		await pending.complete(undefined);
+		await timeout(0);
+		assert.deepStrictEqual(first.getUris(), [latestResource]);
+		assert.deepStrictEqual(second.getUris(), [latestResource]);
+	});
+
+	test('widget registration preserves a pending service-wide refresh for existing widgets', async () => {
+		const h = createHarness();
+		await h.update();
+		assert.deepStrictEqual(h.contexts.getUris(), [resource]);
+		const latestResource = URI.file('/workspace/latest.ts');
+		h.setResource(latestResource);
+		const pending = new DeferredPromise<undefined>();
+		h.setContextResolver(() => pending.p);
+		const refresh = h.refreshAll();
+		h.setContextResolver(async () => undefined);
+		const added = h.addWidget();
+		await timeout(0);
+		await pending.complete(undefined);
+		await refresh;
+		await timeout(0);
+		assert.deepStrictEqual(h.contexts.getUris(), [latestResource]);
+		assert.deepStrictEqual(added.getUris(), [latestResource]);
+	});
 
 	test('live input retains resource context', async () => {
 		const h = createHarness();

@@ -25,7 +25,7 @@ import { IChatService } from '../../common/chatService/chatService.js';
 import { IChatRequestImplicitVariableEntry, IChatRequestVariableEntry, isStringImplicitContextValue, StringChatContextValue, ChatContextIconPath } from '../../common/attachments/chatVariableEntries.js';
 import { ChatAgentLocation } from '../../common/constants.js';
 import { ILanguageModelIgnoredFilesService } from '../../common/ignoredFiles.js';
-import { IChatWidget, IChatWidgetService } from '../chat.js';
+import { IChatWidgetService } from '../chat.js';
 import { IChatContextService } from '../contextContrib/chatContextService.js';
 import { ITextModel } from '../../../../../editor/common/model.js';
 import { IRange } from '../../../../../editor/common/core/range.js';
@@ -131,8 +131,9 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 				implicitContext.setValues([]);
 			}
 		}));
-		this._register(this.chatWidgetService.onDidAddWidget(async (widget) => {
-			await this.updateImplicitContext(widget);
+		this._register(this.chatWidgetService.onDidAddWidget(async () => {
+			// Updates share ownership, so a replacement must refresh every live widget.
+			await this.updateImplicitContext();
 		}));
 	}
 
@@ -185,7 +186,7 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 		return getNotebookEditorFromEditorPane(this.editorService.activeEditorPane);
 	}
 
-	private async updateImplicitContext(updateWidget?: IChatWidget): Promise<void> {
+	private async updateImplicitContext(): Promise<void> {
 		const cancelTokenSource = this._currentCancelTokenSource.value = new CancellationTokenSource();
 		const codeEditor = this.findActiveCodeEditor();
 		const model = codeEditor?.getModel();
@@ -284,9 +285,9 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 			return;
 		}
 
-		const widgets = updateWidget ? [updateWidget] : [...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.Chat), ...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.EditorInline)];
+		const widgets = [...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.Chat), ...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.EditorInline)];
 		for (const widget of widgets) {
-			// An explicit widget can lose its input while resource context is resolving.
+			// A widget can lose its input while resource context is resolving.
 			const implicitContext = widget.input?.implicitContext;
 			if (!implicitContext) {
 				continue;
