@@ -123,11 +123,12 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 		}));
 		this._register(this.chatService.onDidSubmitRequest(({ chatSessionResource }) => {
 			const widget = this.chatWidgetService.getWidgetBySessionResource(chatSessionResource);
-			if (!widget?.input.implicitContext) {
+			const implicitContext = widget?.input?.implicitContext;
+			if (!widget || !implicitContext) {
 				return;
 			}
 			if (this._implicitContextEnablement[widget.location] === 'first' && widget.viewModel?.getItems().length !== 0) {
-				widget.input.implicitContext.setValues([]);
+				implicitContext.setValues([]);
 			}
 		}));
 		this._register(this.chatWidgetService.onDidAddWidget(async (widget) => {
@@ -277,13 +278,17 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 			newValue = undefined;
 		}
 
-		if (cancelTokenSource.token.isCancellationRequested) {
+		// Replacing or disposing a CancellationTokenSource does not cancel its token.
+		// Only the current, still-owned update may apply its asynchronous result.
+		if (this._currentCancelTokenSource.value !== cancelTokenSource || cancelTokenSource.token.isCancellationRequested) {
 			return;
 		}
 
 		const widgets = updateWidget ? [updateWidget] : [...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.Chat), ...this.chatWidgetService.getWidgetsByLocations(ChatAgentLocation.EditorInline)];
 		for (const widget of widgets) {
-			if (!widget.input.implicitContext) {
+			// An explicit widget can lose its input while resource context is resolving.
+			const implicitContext = widget.input?.implicitContext;
+			if (!implicitContext) {
 				continue;
 			}
 			const setting = this._implicitContextEnablement[widget.location];
@@ -293,11 +298,11 @@ export class ChatImplicitContextContribution extends Disposable implements IWork
 				// existing values so the attachment bar stays visible.
 				// But when there's no active editor at all, clear the values.
 				const hasActiveEditor = !!this.editorService.activeEditor;
-				if (newValue !== undefined || !widget.input.implicitContext.hasValue || !hasActiveEditor || browser) {
-					widget.input.implicitContext.setValues([{ value: newValue, isSelection }, { value: providerContext, isSelection: false }]);
+				if (newValue !== undefined || !implicitContext.hasValue || !hasActiveEditor || browser) {
+					implicitContext.setValues([{ value: newValue, isSelection }, { value: providerContext, isSelection: false }]);
 				}
 			} else {
-				widget.input.implicitContext.setValues([]);
+				implicitContext.setValues([]);
 			}
 		}
 	}
