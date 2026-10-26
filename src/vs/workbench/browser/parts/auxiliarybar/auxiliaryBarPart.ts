@@ -35,6 +35,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { VisibleViewContainersTracker } from '../visibleViewContainersTracker.js';
 import { Extensions } from '../../panecomposite.js';
 import { IToolBarResponsiveBehaviorOptions } from '../../../../base/browser/ui/toolbar/toolbar.js';
+import { IProductService } from '../../../../platform/product/common/productService.js';
 
 interface IAuxiliaryBarPartConfiguration {
 	position: ActivityBarPosition;
@@ -96,7 +97,8 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 		@IExtensionService extensionService: IExtensionService,
 		@ICommandService private commandService: ICommandService,
 		@IMenuService menuService: IMenuService,
-		@IConfigurationService configurationService: IConfigurationService
+		@IConfigurationService configurationService: IConfigurationService,
+		@IProductService private readonly productService: IProductService
 	) {
 		super(
 			Parts.AUXILIARYBAR_PART,
@@ -136,6 +138,10 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 
 		this.configuration = this.resolveConfiguration();
 
+		// agent-team: a container listed in product.json draws its own header (tabs, maximize, close), so its title
+		// row is hidden while it is the open one; other containers keep theirs.
+		this._register(this.onDidPaneCompositeOpen(composite => this.updateTitleVisibility(composite.getId())));
+
 		this._register(configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration(LayoutSettings.ACTIVITY_BAR_LOCATION)) {
 				this.configuration = this.resolveConfiguration();
@@ -147,6 +153,11 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 				this.onDidChangeActivityBarLocation();
 			}
 		}));
+	}
+
+	private updateTitleVisibility(compositeId: string): void {
+		const headerless = this.productService.agentTeamHeaderlessContainers ?? [];
+		this.setTitleVisibility(!headerless.includes(compositeId));
 	}
 
 	private onDidChangeAutoHideViewContainers(e: { before: number; after: number }): void {

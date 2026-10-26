@@ -160,6 +160,17 @@ export abstract class Part<MementoType extends object = object> extends Componen
 		}
 	}
 
+	/** agent-team: hide or show the title row; its height goes to the content. */
+	protected setTitleVisibility(visible: boolean): void {
+		if (!this.titleArea || this.partLayout?.isTitleVisible() === visible) {
+			return;
+		}
+
+		this.titleArea.style.display = visible ? '' : 'none';
+		this.partLayout?.setTitleVisibility(visible);
+		this.relayout();
+	}
+
 	private relayout() {
 		const dimension = this.getRelayoutDimension();
 		if (dimension && this.contentPosition) {
@@ -223,6 +234,7 @@ class PartLayout {
 
 	private headerVisible: boolean = false;
 	private footerVisible: boolean = false;
+	private titleVisible: boolean = true;
 
 	constructor(
 		private options: IPartOptions,
@@ -233,7 +245,7 @@ class PartLayout {
 	layout(width: number, height: number): ILayoutContentResult {
 		// Title Size: Width (Fill), Height (Variable).
 		let titleSize: Dimension;
-		if (this.options.hasTitle) {
+		if (this.options.hasTitle && this.titleVisible) {
 			const titleHeight = this.layoutService.isFloatingPanelsEnabled() ? PartLayout.AREA_HEIGHT_MODERN_UI : PartLayout.TITLE_HEIGHT;
 			titleSize = new Dimension(width, Math.min(height, titleHeight));
 		} else {
@@ -280,6 +292,14 @@ class PartLayout {
 
 	setHeaderVisibility(visible: boolean): void {
 		this.headerVisible = visible;
+	}
+
+	setTitleVisibility(visible: boolean): void {
+		this.titleVisible = visible;
+	}
+
+	isTitleVisible(): boolean {
+		return this.titleVisible;
 	}
 }
 

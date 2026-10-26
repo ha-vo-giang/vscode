@@ -98,6 +98,8 @@ export interface IDictationRuntimeProductConfig {
 
 export interface IProductConfiguration {
 	readonly version: string;
+	/** agent-team: secondary-sidebar view containers shown without their title row (the view draws its own). */
+	readonly agentTeamHeaderlessContainers?: readonly string[];
 	readonly date?: string;
 	readonly quality?: string;
 	readonly commit?: string;
