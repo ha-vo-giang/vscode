@@ -24,6 +24,7 @@ import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { getPathForFile } from '../../../../platform/dnd/browser/dnd.js';
 import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -327,6 +328,15 @@ export class WebviewElement extends Disposable implements IWebviewElement, Webvi
 				return;
 			}
 			this._startBlockingIframeDragEvents();
+		}));
+
+		// agent-team: File structured clones retain the native backing path. Resolve
+		// only supplied Files; never expose an arbitrary filesystem lookup to webviews.
+		this._register(this.on('resolve-native-drop', ({ id, files }) => {
+			if (!Number.isSafeInteger(id)) { return; }
+			const paths = this._options.enableDropWithoutShift && Array.isArray(files) && files.length <= 128
+				? files.map(file => { try { return getPathForFile(file) ?? ''; } catch { return ''; } }) : [];
+			void this._send('native-drop-paths', { id, paths: paths.every(Boolean) ? paths : [] });
 		}));
 
 		this._register(this.on('drag', (event) => {
@@ -690,6 +700,7 @@ export class WebviewElement extends Disposable implements IWebviewElement, Webvi
 			title: this._content.title,
 			options: {
 				allowMultipleAPIAcquire: !!this._content.options.allowMultipleAPIAcquire,
+				resolveNativeDrop: !!this._options.enableDropWithoutShift,
 				allowScripts: allowScripts,
 				allowForms: this._content.options.allowForms ?? allowScripts, // For back compat, we allow forms by default when scripts are enabled
 			},

@@ -5,7 +5,7 @@
 	<meta charset="UTF-8">
 
 	<meta http-equiv="Content-Security-Policy"
-		content="default-src 'none'; script-src 'sha256-FFQoOVVa2tOE3uqUvirwaMNT20TZmrHcL2aaOjJ8BUo=' 'self'; frame-src 'self'; style-src 'unsafe-inline';">
+		content="default-src 'none'; script-src 'sha256-Wu2JCUFK82Fs5eXG1LPC0j4BhNPGQLrabJmZ7TNQPsw=' 'self'; frame-src 'self'; style-src 'unsafe-inline';">
 
 	<!-- Disable pinch zooming -->
 	<meta name="viewport"
@@ -821,6 +821,44 @@
 			e.preventDefault();
 		}
 
+		// agent-team: the isolated iframe cannot call Electron webUtils itself.
+		// Send native File objects over our private port and replay this exact drop
+		// with CodeFiles metadata after the host resolves their backing paths.
+		let resolveNativeDrop = false;
+		let nativeDropId = 0;
+		/** @type {Map<number, (paths: string[]) => void>} */
+		const nativeDrops = new Map();
+		hostMessaging.onMessage('content', (_event, data) => { resolveNativeDrop = !!data.options.resolveNativeDrop; });
+		hostMessaging.onMessage('native-drop-paths', (_event, data) => { nativeDrops.get(data.id)?.(data.paths); });
+
+		function handleNativeFileDrop(/** @type {DragEvent} */ event) {
+			const transfer = event.dataTransfer;
+			if (!onElectron || !resolveNativeDrop || !event.isTrusted || !transfer || !transfer.files.length || transfer.files.length > 128) { return; }
+			if (['CodeFiles', 'ResourceURLs', 'text/uri-list', 'application/vnd.code.uri-list'].some(type => transfer.getData(type))) { return; }
+			const target = /** @type {Element | null} */ (event.target);
+			if (!target?.isConnected) { return; }
+			// DataTransfer becomes protected when the native event ends: snapshot now.
+			const files = Array.from(transfer.files);
+			const strings = Array.from(transfer.types).filter(type => type !== 'Files').map(type => [type, transfer.getData(type)]);
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			const id = ++nativeDropId;
+			const finish = (/** @type {string[]} */ paths) => {
+				if (!nativeDrops.delete(id)) { return; }
+				clearTimeout(timer);
+				if (!target.isConnected) { return; }
+				const dataTransfer = new DataTransfer();
+				for (const file of files) { dataTransfer.items.add(file); }
+				for (const [type, value] of strings) { dataTransfer.setData(type, value); }
+				if (paths.length === files.length) { dataTransfer.setData('CodeFiles', JSON.stringify(paths)); }
+				target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer,
+					clientX: event.clientX, clientY: event.clientY, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey }));
+			};
+			const timer = setTimeout(() => finish([]), 2000);
+			nativeDrops.set(id, finish);
+			hostMessaging.postMessage('resolve-native-drop', { id, files });
+		}
+
 		/**
 		 * @param {() => void} callback
 		 */
@@ -1220,6 +1258,7 @@
 					contentWindow.addEventListener('dragover', handleInnerDragEvent);
 					contentWindow.addEventListener('drag', handleInnerDragEvent);
 					contentWindow.addEventListener('drop', handleInnerDropEvent);
+					contentWindow.addEventListener('drop', handleNativeFileDrop, true);
 
 					unloadMonitor.onIframeLoaded(newFrame);
 				}

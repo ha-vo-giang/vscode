@@ -42,6 +42,7 @@ export type FromWebviewMessage = {
 	'did-context-menu': { clientX: number; clientY: number; context: { [key: string]: unknown } };
 	'drag-start': void;
 	'drag': WebViewDragEvent;
+	'resolve-native-drop': { id: number; files: File[] };
 	'updated-intrinsic-content-size': { width: number; height: number };
 };
 
@@ -52,6 +53,7 @@ interface UpdateContentEvent {
 		allowMultipleAPIAcquire: boolean;
 		allowScripts: boolean;
 		allowForms: boolean;
+		resolveNativeDrop: boolean;
 	};
 	state: any;
 	cspSource: string;
@@ -59,6 +61,7 @@ interface UpdateContentEvent {
 }
 
 export type ToWebviewMessage = {
+	'native-drop-paths': { id: number; paths: string[] };
 	'focus': void;
 	'message': { message: any; transfer?: ArrayBuffer[] };
 	'execCommand': string;
