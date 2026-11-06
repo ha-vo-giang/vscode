@@ -21,7 +21,7 @@ import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 import { ToggleAuxiliaryBarAction } from '../parts/auxiliarybar/auxiliaryBarActions.js';
 import { TogglePanelAction } from '../parts/panel/panelActions.js';
-import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { AuxiliaryBarVisibleContext, PanelAlignmentContext, PanelVisibleContext, SideBarVisibleContext, FocusedViewContext, InEditorZenModeContext, IsMainEditorCenteredLayoutContext, MainEditorAreaVisibleContext, IsMainWindowFullscreenContext, PanelPositionContext, IsAuxiliaryWindowFocusedContext, IsSessionsWindowContext, TitleBarStyleContext, IsAuxiliaryWindowContext, CustomMenuBarVisibleContext } from '../../common/contextkeys.js';
 import { Codicon } from '../../../base/common/codicons.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -1276,6 +1276,21 @@ registerAction2(IncreaseViewHeightAction);
 registerAction2(DecreaseViewSizeAction);
 registerAction2(DecreaseViewWidthAction);
 registerAction2(DecreaseViewHeightAction);
+
+// agent-team: extensions cannot size a side bar, and the width actions above follow focus, which a webview view
+// never reports to the layout. Sizes the side bar holding the view; other locations and windows are left alone.
+CommandsRegistry.registerCommand('_agentTeam.resizeViewWidth', (accessor, viewId: unknown, delta: unknown) => {
+	if (typeof viewId !== 'string' || typeof delta !== 'number' || !Number.isFinite(delta)) {
+		return;
+	}
+
+	const layoutService = accessor.get(IWorkbenchLayoutService);
+	const location = accessor.get(IViewDescriptorService).getViewLocationById(viewId);
+	const part = location === ViewContainerLocation.AuxiliaryBar ? Parts.AUXILIARYBAR_PART : location === ViewContainerLocation.Sidebar ? Parts.SIDEBAR_PART : undefined;
+	if (part && layoutService.activeContainer === layoutService.mainContainer) {
+		layoutService.resizePart(part, delta, 0);
+	}
+});
 
 //#region Quick Input Alignment Actions
 
