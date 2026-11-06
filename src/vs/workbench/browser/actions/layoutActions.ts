@@ -1292,6 +1292,14 @@ CommandsRegistry.registerCommand('_agentTeam.resizeViewWidth', (accessor, viewId
 	}
 });
 
+// agent-team: Settings sit with the layout controls instead of taking room in every chat header.
+MenuRegistry.appendMenuItem(MenuId.LayoutControlMenu, {
+	command: { id: 'agentTeam.openSettings', title: localize2('agentTeamSettings', "Agent Team Settings"), icon: Codicon.settingsGear },
+	group: 'navigation',
+	order: -1,
+	when: IsAuxiliaryWindowContext.negate()
+});
+
 //#region Quick Input Alignment Actions
 
 registerAction2(class AlignQuickInputTopAction extends Action2 {
